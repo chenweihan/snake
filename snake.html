@@ -1,0 +1,372 @@
+<!DOCTYPE HTML>
+<html>
+<header>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+<title> 贪吃蛇 </title>
+<style type="text/css">
+
+body {
+    padding : 0px;
+    margin : 0px;
+
+}
+
+#title_div {margin : 0 auto;width:400px;height:100px}
+#tcs_div {
+          border : 2px dotted #000000;
+	  width : 400px;
+	  height : 400px;
+	  margin : 0 auto;
+	  padding : 0px;
+}
+</style>
+</header>
+<body>
+  <div id = "title_div">
+  <h1>HTML5 贪吃蛇</h1>author : Chen weihan time : 2012.07.17
+  </div>
+  <div id="tcs_div">
+     <canvas id = 'tcs_canvas' width="400" height="400"></canvas>
+  </div>
+
+<script type='text/javascript'>
+
+
+window.onload = function(){ TCS.init()};
+
+/**
+ * canvas 需要使用属性来调整大小，而非css，css是拉大效果，定位都会出错
+ * @fileOverview :  贪吃蛇
+ * @author : Chen Wei Han <csq-3@163.com>
+ * @time : 2012.7.17 
+ * @version : v1.0
+ */
+var intervalID;
+/**
+ * 贪吃蛇对象
+ */
+var TCS = {
+    
+    /**
+     * 画布对象
+     */
+    _ctx : null,
+   
+    /**
+     * 画布区域
+     */
+    _canvas : {
+            x : 400,
+	    y : 400
+    },
+
+    /**
+     * 食物坐标
+     */
+    _food : null,
+    
+    /**
+     * 贪吃蛇 对象
+     */
+    _snake : {
+         level : 250,
+         width : 10,
+	 height : 10,
+	 length : 1,         
+	 color : '#aa2117', //贪吃蛇颜色
+	 d : 'D',           //缓存当前蛇运动方向
+	 sp : {x:100,y:100},//开始坐标
+	 hp : {x:100,y:100},//头部坐标
+	 fp : {x:100,y:100},//尾部坐标
+	 cp : {}            //缓存每块对象坐标
+    },
+    
+    
+    /**
+     * 食物随机,不能于当前贪吃蛇坐标重合
+     */
+    randomFood: function() {
+       var x = this.randomNum(),
+           y = this.randomNum(),
+	   c = '#225a1f',
+           cp = this._snake.cp,
+           bool = false;
+       
+       for (var i in cp) {
+            if(x == cp[i].x && y==cp[i].y) {
+	       bool = true;
+	    }
+       }
+       
+       if (bool) {
+          this.getX();
+       } else {
+          this._food = {x:x,y:y}; 
+          this.renderBlock(x,y,c);
+
+       }
+    },
+
+    /**
+     * 随机函数
+     */
+    randomNum : function(){
+         return Math.floor(Math.random()*4)*100+Math.floor(Math.random()*10)*10; 
+    },
+   
+    /**
+     * 初始化参数
+     */
+    init :function() {
+        //this.randPoint();
+        this.bindEvt();
+	this.run();
+        this.randomFood();
+    },
+
+    /**
+     * 绑定方向键
+     */
+    bindEvt : function() {
+         var tthis = this;      
+         //$(document).keyup(function(e){
+	 document.onkeyup = function(e){
+	     var  e   =   window.event||e,   
+	          k   =   e.keyCode||e.which;
+	          switch(k) {
+		     case 37 :
+		       if (tthis._snake.d !== 'L' && tthis._snake.d !=='R') {
+		           tthis._snake.d = 'L';
+		       }
+		     break;
+		     case 38 :
+		       if (tthis._snake.d !== 'T' && tthis._snake.d !=='D') {
+		          tthis._snake.d = 'T';
+		       }
+		     break;
+		     case 39 :
+		       if (tthis._snake.d !== 'L' && tthis._snake.d !=='R') {
+		          tthis._snake.d = 'R';
+		       }
+		     break;
+		     case 40 :
+		       if (tthis._snake.d !== 'T' && tthis._snake.d !=='D') {
+		          tthis._snake.d = 'D';
+		       }
+		     break;
+		  }       
+         };
+    },
+
+    /**
+     * 开始
+     */
+    run : function() {
+        this._ctx =  this.createCanvasObj();
+	this.moveSnake();
+	this.interval();
+
+    },
+
+    /**
+     * 创建随机起点
+     */
+    randPoint : function() {
+        //todo
+    },
+
+    /**
+     * 创建绘图对象
+     */
+    createCanvasObj : function() {
+       var canvas = document.getElementById('tcs_canvas'),
+           context = canvas.getContext("2d");
+	   return context;
+    },
+
+    /**
+     *  业务逻辑处理
+     */
+    moveSnake : function() {
+        var x = this._snake.hp.x,
+	    y = this._snake.hp.y,
+	    c = this._snake.color;
+       
+        //判断是否碰到边界了
+	this.canvasBorder();
+
+	//判断蛇是否碰到自己了   
+	var over = this.snakeEatSelf(x,y);
+	if (over) {
+            this.gameOver();
+	    return
+	}
+       
+        //判断蛇是否吃到食物了 [true为没有吃到食物]
+        var bool = this.snakeEatFoot(x,y,c);
+	if (bool) {
+	   this.clearSnake();
+	}
+
+        //缓存蛇每个模块即时变化得位置，等于一个链表结构
+        this.cachePosition();
+
+	//渲染模块
+	this.renderBlock(x,y,c);
+        
+	//重置头尾模块得坐标位置
+        this.resetPosition(); 
+    },
+    
+    /**
+     * 游戏结束
+     */
+    gameOver : function() {
+         window.clearInterval(intervalID);
+  	 alert('game over!')
+	 this.reset();
+	 window.location.reload();
+    },
+
+    /**
+     * 重置开始
+     */
+    reset : function() {
+        this._ctx.clearRect(0,0,this._canvas.x,this._canvas.y);
+    },
+
+    /**
+     * 渲染模块
+     */
+    renderBlock : function(x,y,c) {
+        this._ctx.fillStyle = '#ffffff';
+        this._ctx.fillRect(x,y,this._snake.width,this._snake.height);
+	this._ctx.fillStyle = c;
+        this._ctx.fillRect(x+1,y+1,this._snake.width-1,this._snake.height-1);
+    },
+
+    /**
+     * 判断贪吃蛇与食物是否重合
+     */
+    snakeEatFoot : function(x,y) {
+       if (this._food != null) {
+         if (x == this._food.x && y == this._food.y){
+           this.randomFood();
+	   this._snake.length = this._snake.length + 1;
+	   return false;
+         }
+       }
+       return true;
+    },
+
+    /**
+     * 判断贪吃蛇是否碰到自己了
+     */
+    snakeEatSelf : function(x,y,c) {
+      var cp = this._snake.cp,
+          bool = false;
+          
+      for (var i in cp) {
+            if(x == cp[i].x && y==cp[i].y) {
+	       bool = true;
+	    }
+       }
+       return bool; 
+    },
+
+    /**
+     * 判断是否碰撞到边界
+     */
+    canvasBorder : function() {
+       if (this._snake.hp.x == -10 || this._snake.hp.y == -10 || this._snake.hp.x == this._canvas.x || this._snake.hp.y == this._canvas.y) {
+          this.gameOver();
+	  return;
+       };
+    },
+
+    /**
+     * 深度克隆对象属性
+     */
+    cloneObj : function(obj){
+	var objClone;
+	if (obj.constructor == Object){
+	  objClone = new obj.constructor();
+	}else{
+	  objClone = new obj.constructor(obj.valueOf());
+	}
+	for(var key in obj){
+	  if ( objClone[key] != obj[key] ){
+	    if ( typeof(obj[key]) == 'object' ){
+	       objClone[key] = clone(obj[key]);
+	    }else{
+	       objClone[key] = obj[key];
+	    }
+	  }
+	}
+	objClone.toString = obj.toString;
+	objClone.valueOf = obj.valueOf;
+	return objClone;
+     },
+
+    /**
+     * 缓存每块对象 等于一个链表结构
+     */
+    cachePosition : function() {
+        var tthis = this;
+	    len = tthis._snake.length;
+        for (var i = len;i>1;i--) {
+	    tthis._snake.cp[i] = tthis.cloneObj(tthis._snake.cp[i-1]);
+	}
+    },
+
+    /**
+     * 重置头尾位置
+     */
+    resetPosition : function() {
+       var tthis = this,
+           d = tthis._snake.d;
+	   tthis._snake.cp[1] = tthis.cloneObj(tthis._snake.hp);
+	   tthis._snake.fp = tthis.cloneObj(tthis._snake.cp[tthis._snake.length]);
+	   switch(d) {
+              case 'L' : 
+		  tthis._snake.hp.x = tthis._snake.hp.x - tthis._snake.width;
+              break;
+		  
+	      case 'T' :
+		  tthis._snake.hp.y = tthis._snake.hp.y - tthis._snake.height;
+	      break;
+
+              case 'R' :
+		  tthis._snake.hp.x = tthis._snake.hp.x + tthis._snake.width;
+	      break;
+
+	      case 'D' :
+		  tthis._snake.hp.y = tthis._snake.hp.y + tthis._snake.height;
+	      break;
+	   }
+
+    },
+
+    /**
+     * 清除绘图
+     */
+    clearSnake : function() {
+         this._ctx.clearRect(this._snake.fp.x,this._snake.fp.y,this._snake.width,this._snake.height);
+    },
+    
+    /**
+     * 定时器
+     */
+    interval : function() {
+        var tthis = this;
+	    intervalID = window.setInterval(function(){
+	     //(function(){}();
+	     tthis.moveSnake();
+	    },this._snake.level);
+
+    }
+};
+
+</script>
+</body>
+</html>
